@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project
+bin/
+temp/
+logs/*.log
+logs/*.log.*
+config/settings.json
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Flet build
+build/
+dist/
+*.spec
+
+# Archives
+*.zip
+*.tar.gz
+*.rar

@@ -18,8 +18,9 @@ class Header:
 
         title_row = ft.Row(
             controls=[
-                ft.Text(
-                    "🦙",
+                ft.Icon(
+                    ft.Icons.AUTO_FIX_HIGH,
+                    color=PRIMARY,
                     size=24,
                 ),
                 ft.Text(

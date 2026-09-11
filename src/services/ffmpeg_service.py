@@ -1,9 +1,13 @@
 import subprocess
 import os
+import platform
 from typing import List, Callable, Optional
 from src.core.config import FFMPEG
 from src.core.exceptions import FFmpegExecutionError
 from src.utils.logger import log_info, log_error
+
+IS_WINDOWS = platform.system() == "Windows"
+CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
 
 
 def _parse_out_time(value: str) -> Optional[float]:
@@ -58,6 +62,7 @@ def process_file(
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            creationflags=CREATE_NO_WINDOW,
         )
 
         if process.stdout is not None:

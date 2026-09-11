@@ -37,7 +37,7 @@ class MainView:
         self.is_processing = False
 
         self.header = Header(on_theme_toggle=self._on_theme_toggle)
-        self.files_column = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO)
+        self.files_column = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
         self.streams_container = ft.Container()
         self.status_text = ft.Text(
             "Carga videos para comenzar",
@@ -66,6 +66,10 @@ class MainView:
             color=theme_manager.text_secondary,
             expand=True,
         )
+
+        self.clear_btn: Optional[ft.ElevatedButton] = None
+        self.select_all_btn: Optional[ft.ElevatedButton] = None
+        self.deselect_all_btn: Optional[ft.ElevatedButton] = None
 
     def build(self) -> ft.Column:
         self.files_column.controls.clear()
@@ -158,15 +162,21 @@ class MainView:
 
     def _build_files_panel(self) -> ft.Container:
         open_btn = self._build_button_primary(
-            "Abrir videos",
+            "Videos",
             ft.Icons.VIDEO_FILE,
             self._load_files,
         )
-        clear_btn = self._build_button_secondary(
-            "Limpiar lista",
+        folder_btn = self._build_button_primary(
+            "Carpeta",
+            ft.Icons.FOLDER,
+            self._load_folder,
+        )
+        self.clear_btn = self._build_button_secondary(
+            "Limpiar",
             ft.Icons.DELETE_SWEEP,
             self._clear_files,
         )
+        self._update_button_states()
 
         header = ft.Row(
             controls=[
@@ -185,33 +195,33 @@ class MainView:
             color=theme_manager.text_secondary,
         )
 
-        self.files_column.controls.append(
-            ft.Container(
-                content=ft.Column(
-                    controls=[
-                        ft.Icon(
-                            ft.Icons.VIDEO_FILE_OUTLINED,
-                            color=theme_manager.text_secondary,
-                            size=48,
-                        ),
-                        ft.Text(
-                            "Arrastra videos o haz clic en Abrir",
-                            size=13,
-                            color=theme_manager.text_secondary,
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=8,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                ),
-                padding=ft.Padding.all(32),
+        self.drop_zone = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Icon(
+                        ft.Icons.VIDEO_FILE_OUTLINED,
+                        color=theme_manager.text_secondary,
+                        size=48,
+                    ),
+                    ft.Text(
+                        "Haz clic en Videos o Carpeta para agregar archivos",
+                        size=13,
+                        color=theme_manager.text_secondary,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
                 expand=True,
-            )
+            ),
+            padding=ft.Padding.all(32),
+            expand=True,
         )
+        self.files_column.controls.append(self.drop_zone)
 
         buttons_row = ft.Row(
-            controls=[open_btn, clear_btn],
+            controls=[open_btn, folder_btn, self.clear_btn],
             spacing=8,
         )
 
@@ -292,19 +302,20 @@ class MainView:
             expand=True,
         )
 
-        select_all_btn = self._build_button_secondary(
+        self.select_all_btn = self._build_button_secondary(
             "Marcar todo",
             ft.Icons.SELECT_ALL,
             self._select_all,
         )
-        deselect_all_btn = self._build_button_secondary(
+        self.deselect_all_btn = self._build_button_secondary(
             "Desmarcar todo",
             ft.Icons.DESELECT,
             self._deselect_all,
         )
+        self._update_button_states()
 
         buttons_row = ft.Row(
-            controls=[select_all_btn, deselect_all_btn],
+            controls=[self.select_all_btn, self.deselect_all_btn],
             spacing=8,
         )
 
@@ -423,7 +434,7 @@ class MainView:
                                 size=48,
                             ),
                             ft.Text(
-                                "Arrastra videos o haz clic en Abrir",
+                                "Haz clic en Videos o Carpeta para agregar archivos",
                                 size=13,
                                 color=theme_manager.text_secondary,
                                 text_align=ft.TextAlign.CENTER,
@@ -432,6 +443,7 @@ class MainView:
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=8,
                         alignment=ft.MainAxisAlignment.CENTER,
+                        expand=True,
                     ),
                     padding=ft.Padding.all(32),
                     expand=True,
@@ -446,6 +458,7 @@ class MainView:
                 )
                 self.files_column.controls.append(card.build())
 
+        self._update_button_states()
         self.page.update()
 
     def _remove_file(self, index: int):
@@ -469,7 +482,59 @@ class MainView:
         self._set_status("Lista limpia.")
         self.progress_bar.value = 0
         self.progress_bar.visible = False
+        self._update_button_states()
         self.page.update()
+
+    def _update_button_states(self):
+        has_files = bool(self.files)
+        has_streams = bool(self.current_streams)
+
+        if self.clear_btn:
+            self.clear_btn.disabled = not has_files
+        if self.select_all_btn:
+            self.select_all_btn.disabled = not has_streams
+        if self.deselect_all_btn:
+            self.deselect_all_btn.disabled = not has_streams
+
+    def _load_folder(self, e):
+        async def pick_folder_async():
+            folder_picker = ft.FilePicker()
+            self.page.services.append(folder_picker)
+            self.page.update()
+
+            path = await folder_picker.get_directory_path(
+                dialog_title="Selecciona carpeta con videos",
+            )
+
+            if not path:
+                self.page.services.remove(folder_picker)
+                self.page.update()
+                return
+
+            import os
+            from src.core.constants import SUPPORTED_FORMATS
+
+            new_files = []
+            for root, _, files in os.walk(path):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in SUPPORTED_FORMATS:
+                        full_path = os.path.join(root, file)
+                        if full_path not in self.files:
+                            new_files.append(full_path)
+
+            if new_files:
+                self.files.extend(new_files)
+                self._update_files_list()
+                self._load_streams(self.files[0])
+                self._set_status(f"{len(new_files)} video(s) encontrados en la carpeta.")
+            else:
+                self._set_status("No se encontraron videos en la carpeta seleccionada.")
+
+            self.page.services.remove(folder_picker)
+            self.page.update()
+
+        self.page.run_task(pick_folder_async)
 
     def _load_streams(self, file_path: str):
         try:
@@ -520,6 +585,7 @@ class MainView:
             )
             self.streams_container.content = self.stream_list_widget.build()
 
+        self._update_button_states()
         self.streams_container.update()
 
     def _on_stream_selection_change(self):
